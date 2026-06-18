@@ -1,0 +1,24 @@
+; тестовое API
+; ALFA_BASE=https://alfa.rbsuat.com/payment/rest
+; продуктовое API
+; ALFA_BASE=https://payment.alfabank.ru/payment/rest
+
+PORT=порт на котором будет развёрнуто
+
+ALFA_USER=имя от альфабанка
+ALFA_PASS=пароль от альфа банка
+PANEL_USER=имя для входа
+PANEL_PASS=пароль для входа
+ENCRYPTION_KEY=ключ шифрования данных
+SECRET_KEY=ключ верификации
+
+
+DB_HOST=ip бд
+DB_PORT=порт бд
+DB_NAME=имя бд
+DB_USER=изер бд
+DB_PASS=пароль от бд
+RETURN_URL=путь на который происходит пересылка после совершения платежа клиентом
+
+SSL_CERT=путь к файлу сертификата
+SSL_KEY=путь к приватному ключу сертификата

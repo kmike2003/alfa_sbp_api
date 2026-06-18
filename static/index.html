@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>СБП · Рекуррентная оплата</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&display=swap');
+:root{
+  --bg:#0f1117;--surface:#181c27;--surface2:#1e2235;--border:#252b3b;--border2:#2f3650;
+  --accent:#ef3124;--accent-dim:#b5231a;--accent-bg:rgba(239,49,36,.08);
+  --text:#e8eaf0;--muted:#6b7280;--muted2:#9aa3af;
+  --green:#22c55e;--green-bg:rgba(34,197,94,.08);--green-border:rgba(34,197,94,.25);
+  --yellow:#eab308;--yellow-bg:rgba(234,179,8,.08);--yellow-border:rgba(234,179,8,.25);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.08);--red-border:rgba(239,68,68,.25);
+  --blue:#3b82f6;--blue-bg:rgba(59,130,246,.08);--blue-border:rgba(59,130,246,.25);
+  --r:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Onest',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.app{display:flex;min-height:100vh;}
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);}
+.logo-mark{width:36px;height:36px;background:var(--accent);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;margin-bottom:10px;}
+.logo-title{font-size:14px;font-weight:600;}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.nav{padding:12px 10px;flex:1;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+  cursor:pointer;font-size:13px;font-weight:500;color:var(--muted2);transition:all .15s;
+  margin-bottom:2px;border:none;background:none;width:100%;text-align:left;font-family:inherit;}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text);}
+.nav-item.active{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(239,49,36,.15);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;
+  font-weight:700;padding:1px 6px;border-radius:999px;display:none;}
+.sidebar-footer{padding:10px;border-top:1px solid var(--border);}
+.env-badge{padding:7px 10px;border-radius:8px;font-size:11px;font-weight:600;
+  display:flex;align-items:center;gap:6px;border:1px solid;margin-bottom:8px;}
+.env-badge.test{background:var(--yellow-bg);border-color:var(--yellow-border);color:var(--yellow);}
+.env-badge.prod{background:var(--green-bg);border-color:var(--green-border);color:var(--green);}
+.logout-btn{width:100%;padding:7px;background:none;border:1px solid var(--border);border-radius:7px;
+  color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s;}
+.logout-btn:hover{border-color:var(--red-border);color:var(--red);}
+.main{flex:1;padding:32px 28px 80px;max-width:700px;}
+.page{display:none;}.page.active{display:block;}
+.page-header{margin-bottom:24px;}
+.page-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+.page-sub{font-size:13px;color:var(--muted);}
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:36px;width:100%;max-width:360px;}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-bottom:16px;}
+.sect{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+.field-group{display:flex;flex-direction:column;gap:12px;margin-bottom:18px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px;
+  letter-spacing:.04em;text-transform:uppercase;}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color .15s;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.field input::placeholder{color:var(--muted);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+select option{background:#1e2235;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 18px;
+  border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#fff;width:100%;padding:13px;}
+.btn-primary:hover{background:var(--accent-dim);}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.btn-secondary{background:transparent;border:1px solid var(--border);color:var(--muted2);}
+.btn-secondary:hover{border-color:var(--border2);color:var(--text);background:rgba(255,255,255,.03);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-danger{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);}
+.btn-danger:hover{background:rgba(239,68,68,.15);}
+.btn-success{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);}
+.spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;
+  border-radius:50%;animation:spin .6s linear infinite;display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.alert{border-radius:8px;padding:11px 13px;font-size:12px;line-height:1.6;margin-bottom:14px;display:none;white-space:pre-line;}
+.alert.error{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);}
+.alert.success{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);}
+.alert.info{background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);}
+.alert.warn{background:var(--yellow-bg);border:1px solid var(--yellow-border);color:var(--yellow);}
+.hint{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.6;}
+.hint b{color:var(--muted2);}
+.steps{display:flex;align-items:center;gap:6px;margin-bottom:20px;}
+.step-dot{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--muted);}
+.step-dot.active{border-color:var(--accent);background:var(--accent);color:#fff;}
+.step-dot.done{border-color:var(--green);background:var(--green);color:#fff;}
+.step-line{flex:1;height:1px;background:var(--border);}
+.result-card{display:none;flex-direction:column;align-items:center;gap:14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px;margin-top:16px;}
+#qr-img{width:210px;height:210px;border-radius:10px;background:#fff;padding:8px;
+  box-shadow:0 0 0 1px var(--border);display:none;}
+.payment-link-box{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-size:12px;color:var(--accent);word-break:break-all;line-height:1.5;
+  user-select:all;cursor:text;}
+.order-meta{font-size:10px;color:var(--muted);text-align:center;word-break:break-all;line-height:1.7;}
+.client-summary{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:12px;font-size:12px;line-height:1.9;}
+.client-summary b{color:var(--muted);font-weight:500;}
+.poll-indicator{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--yellow);
+  background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:8px;
+  padding:9px 13px;width:100%;}
+.poll-dot{width:8px;height:8px;border-radius:50%;background:var(--yellow);animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead{background:var(--surface2);}
+th{padding:9px 12px;text-align:left;font-weight:600;color:var(--muted);font-size:10px;
+  text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.012);}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;
+  font-size:10px;font-weight:600;white-space:nowrap;}
+.badge-green{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);}
+.badge-red{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);}
+.badge-yellow{background:var(--yellow-bg);border:1px solid var(--yellow-border);color:var(--yellow);}
+.badge-muted{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;
+  align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:24px;width:100%;max-width:420px;position:relative;}
+.modal-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--muted);
+  font-size:20px;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:18px;}
+.history-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:14px;margin-bottom:10px;font-size:12px;line-height:1.9;}
+.history-item b{color:var(--muted);font-weight:500;}
+.history-amount{font-size:18px;font-weight:700;}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);}
+.empty .empty-icon{font-size:40px;margin-bottom:12px;}
+.empty p{font-size:13px;line-height:1.6;}
+@media(max-width:680px){
+  .app{flex-direction:column;}
+  .sidebar{width:100%;height:auto;position:relative;}
+  .nav{display:flex;flex-wrap:wrap;padding:8px;gap:4px;}
+  .nav-item{flex:1;min-width:70px;justify-content:center;font-size:11px;padding:7px 4px;}
+  .nav-item span:not(.nav-icon){display:none;}
+  .logo{display:none;}.sidebar-footer{display:none;}
+  .main{padding:14px 12px 60px;}
+  .field-row{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div style="width:40px;height:40px;background:var(--accent);border-radius:10px;
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;color:#fff;flex-shrink:0">СБП</div>
+      <div>
+        <div style="font-size:17px;font-weight:700">Рекуррентная оплата</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Альфа-банк · Панель управления</div>
+      </div>
+    </div>
+    <div class="alert error" id="login-error"></div>
+    <div class="field-group">
+      <div class="field">
+        <label>Логин</label>
+        <input type="text" id="login-user" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Пароль</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="login-btn" onclick="doLogin()">
+      <span class="spinner" id="login-spinner"></span>
+      <span id="login-btn-text">Войти</span>
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="main-app" class="app" style="display:none">
+  <nav class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">СБП</div>
+      <div class="logo-title">Рекуррентная оплата</div>
+      <div class="logo-sub">Альфа-банк API</div>
+    </div>
+    <div class="nav">
+      <button class="nav-item active" onclick="showPage('page-qr')" id="nav-qr">
+        <span class="nav-icon">📲</span><span>Создать QR</span>
+      </button>
+      <button class="nav-item" onclick="showPage('page-bindings')" id="nav-bindings">
+        <span class="nav-icon">🔗</span><span>Привязки</span>
+        <span class="nav-badge" id="bindings-badge"></span>
+      </button>
+      <button class="nav-item" onclick="showPage('page-history')" id="nav-history">
+        <span class="nav-icon">📋</span><span>История</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="env-badge" id="env-badge">⏳ …</div>
+      <button class="logout-btn" onclick="doLogout()">← Выйти</button>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- QR PAGE -->
+    <div class="page active" id="page-qr">
+      <div class="page-header">
+        <div class="page-title">Создать QR-код и ссылку</div>
+        <div class="page-sub">Клиент сканирует → привязывает счёт → ежемесячные списания автоматически</div>
+      </div>
+      <div class="steps">
+        <div class="step-dot active" id="sd1">1</div><div class="step-line"></div>
+        <div class="step-dot" id="sd2">2</div><div class="step-line"></div>
+        <div class="step-dot" id="sd3">3</div>
+      </div>
+      <div class="card">
+        <div class="sect">Данные клиента</div>
+        <div class="field-group">
+          <div class="field-row">
+            <div class="field"><label>Имя клиента *</label>
+              <input type="text" id="q-name" placeholder="Иванов Иван Иванович"></div>
+            <div class="field"><label>Телефон</label>
+              <input type="tel" id="q-phone" placeholder="+79991234567"></div>
+          </div>
+          <div class="field"><label>Email</label>
+            <input type="email" id="q-email" placeholder="client@email.com"></div>
+          <div class="field">
+            <label>Назначение платежа * <span style="color:var(--muted);font-weight:400;text-transform:none">(до 99 символов, без % +)</span></label>
+            <input type="text" id="q-desc" placeholder="Ежемесячная подписка тариф Базовый" maxlength="99">
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Сумма (₽) *</label>
+              <input type="number" id="q-amount" placeholder="1500" min="1" step="0.01"></div>
+            <div class="field"><label>День списания</label>
+              <select id="q-day">
+                <script>for(let i=1;i<=28;i++)document.write(`<option value="${i}">${i}-е число</option>`)</script>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="alert error" id="qr-error"></div>
+        <button class="btn btn-primary" id="qr-btn" onclick="generateQR()">
+          <span class="spinner" id="qr-spinner"></span>
+          <span id="qr-btn-text">Сформировать QR-код с привязкой</span>
+        </button>
+      </div>
+
+      <div class="result-card" id="qr-result">
+        <div class="badge badge-green" id="qr-result-status">✓ QR готов — ожидание сканирования</div>
+        <img id="qr-img" alt="QR">
+        <div class="client-summary" id="qr-summary"></div>
+        <div style="width:100%">
+          <div class="sect" style="margin-bottom:8px">Ссылка для клиента</div>
+          <div class="payment-link-box" id="qr-link-box">—</div>
+        </div>
+        <!-- Только кнопка копировать, без "Поделиться" -->
+        <button class="btn btn-secondary btn-sm" id="qr-copy-btn" onclick="copyLink()" style="width:100%">
+          📋 Копировать ссылку
+        </button>
+        <div class="poll-indicator" id="qr-poll" style="display:none">
+          <div class="poll-dot"></div>
+          <span id="poll-status-text">Ожидание подтверждения…</span>&nbsp;<span id="poll-timer">120</span>с
+        </div>
+        <div class="order-meta" id="qr-meta"></div>
+        <button class="btn btn-secondary btn-sm" onclick="resetQR()" style="width:100%">← Новый клиент</button>
+      </div>
+    </div>
+
+    <!-- BINDINGS PAGE -->
+    <div class="page" id="page-bindings">
+      <div class="page-header">
+        <div class="page-title">Привязки</div>
+        <div class="page-sub">Клиенты с привязанными счетами СБП</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="renderBindings()">🔄 Обновить</button>
+        <button class="btn btn-secondary btn-sm" onclick="showAddManual()">+ Добавить вручную</button>
+      </div>
+      <div class="alert error" id="bind-error"></div>
+      <div class="alert info" style="display:block;font-size:12px;margin-bottom:12px">
+        ℹ️ Binding ID появляется автоматически после того, как клиент сканирует QR и подтверждает привязку.
+        При необходимости можно ввести вручную через кнопку «Ввести» в таблице.
+      </div>
+      <div id="bindings-empty" class="empty" style="display:none">
+        <div class="empty-icon">🔗</div>
+        <p>Привязок пока нет.<br>Создайте QR-код — запись появится здесь сразу.</p>
+      </div>
+      <div class="table-wrap" id="bindings-table-wrap" style="display:none">
+        <table><thead><tr>
+          <th>Клиент</th><th>Binding ID</th><th>Сумма</th>
+          <th>Следующее списание</th><th>Статус</th><th></th>
+        </tr></thead>
+        <tbody id="bindings-tbody"></tbody></table>
+      </div>
+
+      <div class="card" id="manual-form" style="display:none;margin-top:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:16px">✏️ Добавить привязку вручную</div>
+        <div class="field-group">
+          <div class="field-row">
+            <div class="field"><label>Имя *</label><input type="text" id="mb-name" placeholder="Иванов Иван"></div>
+            <div class="field"><label>Телефон / Email</label><input type="text" id="mb-contact" placeholder="+79991234567"></div>
+          </div>
+          <div class="field">
+            <label>Binding ID * <span style="color:var(--muted);font-weight:400;text-transform:none">(из ЛК банка)</span></label>
+            <input type="text" id="mb-bindingid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Сумма ₽/мес *</label><input type="number" id="mb-amount" placeholder="1500"></div>
+            <div class="field"><label>День списания</label>
+              <select id="mb-day">
+                <script>for(let i=1;i<=28;i++)document.write(`<option value="${i}">${i}-е число</option>`)</script>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Назначение</label><input type="text" id="mb-desc" placeholder="Ежемесячная подписка"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="saveManual()">Сохранить</button>
+          <button class="btn btn-secondary" onclick="hideAddManual()">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div class="page-title">История списаний</div>
+        <div class="page-sub">Все проведённые транзакции</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn btn-secondary btn-sm" onclick="loadHistory()">🔄 Обновить</button>
+        <button class="btn btn-danger btn-sm" onclick="clearHistory()">🗑 Очистить</button>
+      </div>
+      <div id="history-empty" class="empty">
+        <div class="empty-icon">📋</div>
+        <p>История пуста.<br>Нажмите 💳 у клиента в разделе Привязки.</p>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- CHARGE MODAL -->
+<div class="modal-overlay" id="charge-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('charge-modal')">✕</button>
+    <div class="modal-title">💳 Списать платёж</div>
+    <div class="alert error" id="charge-error"></div>
+    <div class="alert success" id="charge-success"></div>
+    <div id="charge-form-inner">
+      <div class="field-group">
+        <div class="field"><label>Клиент</label><input id="ch-name" readonly style="opacity:.6"></div>
+        <div class="field-row">
+          <div class="field"><label>Сумма (₽)</label><input type="number" id="ch-amount" min="1" step="0.01"></div>
+          <div class="field"><label>Назначение *</label><input type="text" id="ch-desc" maxlength="99"></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:16px">
+        Выполнится <b>register.do → paymentOrderBinding.do</b>.<br>
+        Банк спишет без подтверждения клиентом. Требуется пермиссия <b>AUTO_PAYMENT</b>.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="charge-btn" style="flex:1" onclick="executeCharge()">
+          <span class="spinner" id="charge-spinner"></span>
+          <span id="charge-btn-text">Списать</span>
+        </button>
+        <button class="btn btn-secondary" onclick="closeModal('charge-modal')">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DEACT MODAL -->
+<div class="modal-overlay" id="deact-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('deact-modal')">✕</button>
+    <div class="modal-title">🚫 Деактивировать привязку</div>
+    <div class="alert warn" style="display:block">⚠️ После деактивации повторные списания невозможны.</div>
+    <div class="alert error" id="deact-error"></div>
+    <div class="alert success" id="deact-success"></div>
+    <p id="deact-label" style="font-size:14px;margin:14px 0"></p>
+    <div id="deact-btns" style="display:flex;gap:8px">
+      <button class="btn btn-danger" id="deact-btn" style="flex:1" onclick="executeDeactivate()">
+        <span class="spinner" id="deact-spinner"></span>
+        <span id="deact-btn-text">Деактивировать</span>
+      </button>
+      <button class="btn btn-secondary" onclick="closeModal('deact-modal')">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function orderNum(){return 'ORD-'+Date.now()+'-'+Math.random().toString(36).slice(2,5).toUpperCase();}
+function showAlert(id,msg){const e=$(id);if(e){e.textContent=msg;e.style.display='block';}}
+function hideAlert(id){const e=$(id);if(e)e.style.display='none';}
+function closeModal(id){$(id).classList.remove('open');}
+
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  $(id).classList.add('active');
+  const m={'page-qr':'nav-qr','page-bindings':'nav-bindings','page-history':'nav-history'};
+  if(m[id]) $(m[id]).classList.add('active');
+  if(id==='page-bindings') renderBindings();
+  if(id==='page-history')  loadHistory();
+}
+
+// ── API ─────────────────────────────────────────────
+async function api(path, body=null, method='POST'){
+  const opts={method, headers:{'Content-Type':'application/json'}, credentials:'same-origin'};
+  if(body && method!=='GET') opts.body=JSON.stringify(body);
+  const r=await fetch(path, opts);
+  if(r.status===401){location.reload(); throw new Error('Сессия истекла');}
+  return r.json();
+}
+
+// ── AUTH ────────────────────────────────────────────
+async function doLogin(){
+  hideAlert('login-error');
+  const user=$('login-user').value.trim(), pass=$('login-pass').value;
+  if(!user||!pass) return showAlert('login-error','Введите логин и пароль.');
+  $('login-btn').disabled=true;
+  $('login-spinner').style.display='inline-block';
+  $('login-btn-text').textContent='Вход…';
+  try{
+    const r=await api('/api/login',{username:user,password:pass});
+    if(r.ok) showApp();
+    else showAlert('login-error',r.error||'Ошибка');
+  }catch(e){showAlert('login-error',e.message);}
+  finally{
+    $('login-btn').disabled=false;
+    $('login-spinner').style.display='none';
+    $('login-btn-text').textContent='Войти';
+  }
+}
+
+async function doLogout(){
+  await fetch('/api/logout',{method:'POST'}).catch(()=>{});
+  location.reload();
+}
+
+function showApp(){
+  $('login-screen').style.display='none';
+  $('main-app').style.display='flex';
+  const isLocal=location.hostname==='localhost'||location.hostname.startsWith('127.');
+  const b=$('env-badge');
+  b.className='env-badge '+(isLocal?'test':'prod');
+  b.textContent=isLocal?'🧪 Sandbox / Local':'🔴 Production';
+  renderBindings();
+}
+
+// ── QR PAGE ─────────────────────────────────────────
+let pollInterval=null, currentOrder=null, currentPayLink='';
+
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    const d=$('sd'+i);
+    d.className='step-dot'+(i<n?' done':i===n?' active':'');
+  });
+}
+
+async function generateQR(){
+  hideAlert('qr-error');
+  const name   =$('q-name').value.trim();
+  const phone  =$('q-phone').value.trim();
+  const email  =$('q-email').value.trim();
+  const desc   =$('q-desc').value.trim();
+  const amtRaw =parseFloat($('q-amount').value);
+  const day    =parseInt($('q-day').value)||1;
+
+  if(!name)  return showAlert('qr-error','Укажите имя клиента.');
+  if(!desc)  return showAlert('qr-error','Укажите назначение платежа.');
+  if(desc.includes('%')||desc.includes('+'))
+    return showAlert('qr-error','В назначении нельзя использовать % и +');
+  if(desc.length>99) return showAlert('qr-error','Назначение — до 99 символов.');
+  if(!amtRaw||amtRaw<=0) return showAlert('qr-error','Укажите корректную сумму.');
+
+  $('qr-btn').disabled=true;
+  $('qr-spinner').style.display='inline-block';
+  $('qr-btn-text').textContent='Регистрируем заказ…';
+  setStep(2);
+
+  const clientId = phone || email || ('cli-'+Date.now());
+  const oNum = orderNum();
+
+  try{
+    const r1=await api('/api/register',{
+      orderNumber:oNum, amount:Math.round(amtRaw*100),
+      returnUrl:location.origin+'/thanks', description:desc,
+      clientId, features:'FORCE_CREATE_BINDING',
+      phone, email, sbpSenderFIO:name, subscriptionPurpose:desc,
+    });
+    if(r1.errorCode && String(r1.errorCode)!=='0')
+      throw new Error(`register.do — ${r1.errorCode}: ${r1.errorMessage||''}`);
+    if(!r1.orderId)
+      throw new Error('Банк не вернул orderId. '+JSON.stringify(r1));
+
+    currentOrder={orderId:r1.orderId, orderNumber:oNum, name, phone, email, desc, amount:amtRaw, day, clientId};
+    $('qr-btn-text').textContent='Получаем QR-код…';
+    setStep(3);
+
+    const r2=await api('/api/qr',{
+      mdOrder:r1.orderId,
+      redirectUrl:location.origin+'/thanks',
+      paymentPurpose:desc,
+    });
+    if(r2.errorCode && String(r2.errorCode)!=='0')
+      throw new Error(`sbp/c2b/qr — ${r2.errorCode}: ${r2.errorMessage||''}`);
+
+    // Сохраняем PENDING-запись в БД
+    const saved=await api('/api/data/bindings',{
+      name, phone, email, clientId,
+      orderId:r1.orderId,
+      description:desc, amount:amtRaw, day,
+      status:'PENDING',
+    });
+
+    // Запоминаем id записи в БД для последующего патча
+    currentOrder.dbId = saved.id || null;
+
+    updateBadge();
+    showQrResult(r2, currentOrder);
+    startPolling(r1.orderId);
+
+  }catch(err){
+    setStep(1);
+    showAlert('qr-error', err.message);
+  }finally{
+    $('qr-btn').disabled=false;
+    $('qr-spinner').style.display='none';
+    $('qr-btn-text').textContent='Сформировать QR-код с привязкой';
+  }
+}
+
+function showQrResult(r2, {orderId, name, phone, email, desc, amount}){
+  if(r2.renderedQr){
+    $('qr-img').src='data:image/png;base64,'+r2.renderedQr;
+    $('qr-img').style.display='block';
+  }
+  currentPayLink = r2.payload || '';
+  $('qr-link-box').textContent = currentPayLink || '— ссылка не получена, используйте QR-код —';
+  $('qr-summary').innerHTML=
+    `<b>Клиент:</b> ${esc(name)}<br>`+
+    (phone?`<b>Телефон:</b> ${esc(phone)}<br>`:'')+
+    (email?`<b>Email:</b> ${esc(email)}<br>`:'')+
+    `<b>Услуга:</b> ${esc(desc)}<br>`+
+    `<b>Сумма:</b> ${amount.toLocaleString('ru-RU')} ₽ / мес`;
+  $('qr-meta').textContent=`orderId: ${orderId}`;
+  const rc=$('qr-result');
+  rc.style.display='flex';
+  rc.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// Статусы заказа от банка
+const ORDER_STATUS = {
+  0:  null,          // создан, ожидает
+  1:  null,          // предавторизован (не наш случай)
+  2:  'success',     // оплачен
+  3:  null,          // авторизован (не наш)
+  4:  'declined',    // отклонён
+  6:  'declined',    // отклонён (другой код)
+};
+
+function startPolling(orderId){
+  stopPolling();
+  $('qr-poll').style.display='flex';
+  $('poll-status-text').textContent='Ожидание подтверждения…';
+  let secs=120; $('poll-timer').textContent=secs;
+
+  pollInterval=setInterval(async()=>{
+    secs--; $('poll-timer').textContent=secs;
+    if(secs<=0){
+      stopPolling();
+      $('poll-status-text').textContent='Время ожидания истекло.';
+      $('poll-timer').textContent='';
+      $('qr-poll').style.color='var(--muted)';
+      return;
+    }
+    try{
+      const r=await api('/api/status',{orderId});
+      const st = r.orderStatus;
+
+      // Успешная привязка
+      if(String(st)==='2'){
+        stopPolling();
+        $('qr-result-status').className='badge badge-green';
+        $('qr-result-status').textContent='✅ Клиент оплатил и привязал счёт!';
+        $('qr-poll').style.display='none';
+        // Если статус вернул bindingId — патчим запись в БД
+        const bId=r.bindingInfo?.bindingId||'';
+        if(bId && currentOrder?.dbId){
+          await api(`/api/data/bindings/${currentOrder.dbId}`,
+            {binding_id:bId, status:'ACTIVE'}, 'PATCH');
+          renderBindings();
+        }
+        return;
+      }
+
+      // Заказ отклонён (4 или 6) — прекращаем polling
+      if(st===4 || st===6){
+        stopPolling();
+        $('qr-result-status').className='badge badge-red';
+        $('qr-result-status').textContent=
+          `✕ Отклонён банком (actionCode ${r.actionCode})`;
+        $('poll-status-text').textContent=
+          r.actionCodeDescription || 'Операция отклонена. QR-код недействителен.';
+        $('poll-timer').textContent='';
+        $('qr-poll').style.color='var(--red)';
+        $('qr-poll').style.background='var(--red-bg)';
+        $('qr-poll').style.borderColor='var(--red-border)';
+        $('poll-dot').style.display='none';
+      }
+    }catch{}
+  }, 3000);
+}
+
+function stopPolling(){
+  if(pollInterval){clearInterval(pollInterval);pollInterval=null;}
+}
+
+function copyLink(){
+  if(!currentPayLink){
+    showAlert('qr-error','Ссылка не получена от банка — отправьте клиенту QR-код изображением.');
+    return;
+  }
+  // Clipboard API (HTTPS) или fallback (HTTP)
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(currentPayLink).then(()=>{
+      const b=$('qr-copy-btn');
+      b.textContent='✓ Скопировано!';
+      setTimeout(()=>b.textContent='📋 Копировать ссылку', 2000);
+    });
+  } else {
+    const ta=document.createElement('textarea');
+    ta.value=currentPayLink;
+    ta.style.cssText='position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const b=$('qr-copy-btn');
+    b.textContent='✓ Скопировано!';
+    setTimeout(()=>b.textContent='📋 Копировать ссылку', 2000);
+  }
+}
+
+function resetQR(){
+  stopPolling();
+  currentPayLink='';
+  currentOrder=null;
+  $('qr-result').style.display='none';
+  $('qr-img').style.display='none';
+  $('qr-link-box').textContent='—';
+  $('qr-result-status').className='badge badge-green';
+  $('qr-result-status').textContent='✓ QR готов — ожидание сканирования';
+  $('qr-poll').style.cssText='display:none';
+  $('poll-dot').style.display='';
+  hideAlert('qr-error');
+  setStep(1);
+  ['q-name','q-phone','q-email','q-desc','q-amount'].forEach(id=>$(id).value='');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ── BINDINGS ────────────────────────────────────────
+let bindingsCache=[];
+
+async function renderBindings(){
+  hideAlert('bind-error');
+  try{bindingsCache=await api('/api/data/bindings', null, 'GET');}
+  catch(e){showAlert('bind-error', e.message); bindingsCache=[];}
+  updateBadge();
+
+  if(!bindingsCache.length){
+    $('bindings-empty').style.display='block';
+    $('bindings-table-wrap').style.display='none';
+    return;
+  }
+  $('bindings-empty').style.display='none';
+  $('bindings-table-wrap').style.display='block';
+
+  $('bindings-tbody').innerHTML=bindingsCache.map((b,i)=>{
+    const st={
+      ACTIVE:'<span class="badge badge-green">● Активна</span>',
+      PENDING:'<span class="badge badge-yellow">⏳ Ожидание</span>',
+      INACTIVE:'<span class="badge badge-red">✕ Неактивна</span>',
+    }[b.status]||`<span class="badge badge-muted">${esc(b.status||'')}</span>`;
+    const bId = b.binding_id || '';
+    const nxt = b.charge_day ? nextDate(b.charge_day) : '—';
+    return`<tr>
+      <td>
+        <div style="font-weight:600">${esc(b.name)}</div>
+        <div style="color:var(--muted);font-size:11px">${esc(b.phone||b.email||'')}</div>
+        <div style="color:var(--muted);font-size:10px">${esc(b.description||'')}</div>
+      </td>
+      <td>${bId
+        ?`<span style="font-family:monospace;font-size:10px;color:var(--muted2)"
+            title="${esc(bId)}">${bId.slice(0,12)}…</span>`
+        :`<span style="color:var(--yellow);font-size:11px">⚠ Ожидание</span>
+          <button class="btn btn-secondary btn-sm"
+            style="margin-top:4px;font-size:10px;display:block"
+            onclick="enterBindingId(${b.id})">Ввести</button>`
+      }</td>
+      <td style="font-weight:600">${(b.amount||0).toLocaleString('ru-RU')} ₽</td>
+      <td style="color:var(--muted2)">${nxt}</td>
+      <td>${st}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${b.status==='ACTIVE'&&bId
+          ?`<button class="btn btn-success btn-sm" title="Списать"
+              onclick="openCharge(${i})">💳</button>`:''}
+        ${b.status==='ACTIVE'
+          ?`<button class="btn btn-danger btn-sm" title="Деактивировать"
+              onclick="openDeact(${i})">🚫</button>`:''}
+        <button class="btn btn-secondary btn-sm" title="Удалить"
+          onclick="deleteBinding(${b.id})">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function nextDate(day){
+  const n=new Date(), d=new Date(n.getFullYear(), n.getMonth(), day);
+  if(d<=n) d.setMonth(d.getMonth()+1);
+  return d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+}
+
+function updateBadge(){
+  const cnt=(bindingsCache||[]).filter(b=>b.status==='ACTIVE').length;
+  const b=$('bindings-badge');
+  b.style.display=cnt?'inline':'none';
+  b.textContent=cnt;
+}
+
+async function enterBindingId(dbId){
+  const bid=prompt('Введите Binding ID (из ЛК банка или коллбэка):');
+  if(!bid) return;
+  await api(`/api/data/bindings/${dbId}`,{binding_id:bid.trim(), status:'ACTIVE'},'PATCH');
+  renderBindings();
+}
+
+async function deleteBinding(dbId){
+  if(!confirm('Удалить запись?')) return;
+  await api(`/api/data/bindings/${dbId}`, null, 'DELETE');
+  renderBindings();
+}
+
+function showAddManual(){$('manual-form').style.display='block';}
+function hideAddManual(){$('manual-form').style.display='none';}
+
+async function saveManual(){
+  const name=$('mb-name').value.trim();
+  const bid=$('mb-bindingid').value.trim();
+  const amt=parseFloat($('mb-amount').value);
+  if(!name||!bid||!amt) return alert('Заполните Имя, Binding ID и Сумму');
+  await api('/api/data/bindings',{
+    name,
+    clientId:$('mb-contact').value.trim()||name,
+    phone:$('mb-contact').value.trim(),
+    binding_id:bid,
+    description:$('mb-desc').value.trim(),
+    amount:amt,
+    day:parseInt($('mb-day').value)||1,
+    status:'ACTIVE',
+  });
+  hideAddManual();
+  ['mb-name','mb-contact','mb-bindingid','mb-amount','mb-desc'].forEach(id=>$(id).value='');
+  renderBindings();
+}
+
+// ── CHARGE MODAL ────────────────────────────────────
+let chargeIdx=null;
+
+function openCharge(i){
+  chargeIdx=i;
+  const b=bindingsCache[i];
+  $('ch-name').value=b.name;
+  $('ch-amount').value=b.amount||'';
+  $('ch-desc').value=b.description||'Ежемесячная подписка';
+  hideAlert('charge-error'); hideAlert('charge-success');
+  $('charge-form-inner').style.display='block';
+  $('charge-btn').disabled=false;
+  $('charge-btn-text').textContent='Списать';
+  $('charge-modal').classList.add('open');
+}
+
+async function executeCharge(){
+  hideAlert('charge-error'); hideAlert('charge-success');
+  const b=bindingsCache[chargeIdx];
+  const amt=parseFloat($('ch-amount').value);
+  const desc=$('ch-desc').value.trim();
+  if(!amt||amt<=0) return showAlert('charge-error','Укажите сумму.');
+  if(!desc)        return showAlert('charge-error','Укажите назначение.');
+  if(desc.length>99) return showAlert('charge-error','Назначение — до 99 символов.');
+
+  $('charge-btn').disabled=true;
+  $('charge-spinner').style.display='inline-block';
+  $('charge-btn-text').textContent='Выполняем…';
+
+  try{
+    const r=await api('/api/charge',{
+      bindingId:   b.binding_id,
+      orderNumber: orderNum(),
+      amount:      Math.round(amt*100),
+      returnUrl:   location.origin+'/thanks',
+      description: desc,
+      clientId:    b.client_id||b.name,
+      clientName:  b.name,
+    });
+    if(r.error) throw new Error(r.error);
+    showAlert('charge-success',
+      `${r.paid?'✅ Успешно списано':'⏳ Статус: '+r.status}\norderId: ${r.orderId}`);
+    $('charge-form-inner').style.display='none';
+  }catch(e){
+    showAlert('charge-error', e.message);
+    $('charge-btn').disabled=false;
+    $('charge-spinner').style.display='none';
+    $('charge-btn-text').textContent='Списать';
+  }
+}
+
+// ── DEACT MODAL ─────────────────────────────────────
+let deactIdx=null;
+
+function openDeact(i){
+  deactIdx=i;
+  const b=bindingsCache[i];
+  $('deact-label').textContent=`${b.name} · ${(b.amount||0).toLocaleString('ru-RU')} ₽/мес`;
+  hideAlert('deact-error'); hideAlert('deact-success');
+  $('deact-btns').style.display='flex';
+  $('deact-btn').disabled=false;
+  $('deact-btn-text').textContent='Деактивировать';
+  $('deact-modal').classList.add('open');
+}
+
+async function executeDeactivate(){
+  const b=bindingsCache[deactIdx];
+  $('deact-btn').disabled=true;
+  $('deact-spinner').style.display='inline-block';
+  $('deact-btn-text').textContent='Деактивируем…';
+  try{
+    const r=await api('/api/binding/deactivate',{bindingId:b.binding_id});
+    if(r.error) throw new Error(r.error);
+    showAlert('deact-success','✅ Привязка деактивирована.');
+    $('deact-btns').style.display='none';
+    renderBindings();
+  }catch(e){
+    showAlert('deact-error', e.message);
+    $('deact-btn').disabled=false;
+    $('deact-spinner').style.display='none';
+    $('deact-btn-text').textContent='Деактивировать';
+  }
+}
+
+// ── HISTORY ─────────────────────────────────────────
+async function loadHistory(){
+  $('history-list').innerHTML='';
+  try{
+    const h=await api('/api/data/history', null, 'GET');
+    if(!h.length){
+      $('history-empty').style.display='block';
+      return;
+    }
+    $('history-empty').style.display='none';
+    $('history-list').innerHTML=h.map(x=>{
+      const dateStr=x.created_at
+        ?new Date(x.created_at).toLocaleString('ru-RU'):'—';
+      const sc=x.status==='SUCCESS'?'badge-green':x.status==='ERROR'?'badge-red':'badge-yellow';
+      const sl=x.status==='SUCCESS'?'✓ Успешно':x.status==='ERROR'?'✕ Ошибка':'⏳ Ожидание';
+      return`<div class="history-item">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div class="history-amount">${(parseFloat(x.amount)||0).toLocaleString('ru-RU')} ₽</div>
+          <span class="badge ${sc}">${sl}</span>
+        </div>
+        <b>Клиент:</b> ${esc(x.client_name||'—')}<br>
+        <b>Назначение:</b> ${esc(x.description||'—')}<br>
+        ${x.error_message?`<b>Ошибка:</b> <span style="color:var(--red)">${esc(x.error_message)}</span><br>`:''}
+        <b>Дата:</b> ${dateStr}<br>
+        <span style="font-family:monospace;font-size:10px;color:var(--muted)">${esc(x.order_id||'')}</span>
+      </div>`;
+    }).join('');
+  }catch(e){console.error('loadHistory:', e);}
+}
+
+async function clearHistory(){
+  if(!confirm('Очистить историю?')) return;
+  await api('/api/data/history', null, 'DELETE');
+  loadHistory();
+}
+
+// ── INIT ────────────────────────────────────────────
+(async()=>{
+  const r=await fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).catch(()=>({}));
+  if(r.authenticated) showApp();
+})();
+</script>
+</body>
+</html>
