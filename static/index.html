@@ -397,6 +397,41 @@ tr:hover td{background:rgba(255,255,255,.012);}
   </div>
 </div>
 
+<!-- EDIT AMOUNT MODAL -->
+<div class="modal-overlay" id="amount-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('amount-modal')">✕</button>
+    <div class="modal-title">✏️ Изменить сумму ежемесячного платежа</div>
+    <div class="alert error" id="amount-error"></div>
+    <div class="alert success" id="amount-success"></div>
+    <div id="amount-form-inner">
+      <div class="field-group">
+        <div class="field"><label>Клиент</label><input id="am-name" readonly style="opacity:.6"></div>
+        <div class="field-row">
+          <div class="field"><label>Новая сумма (₽/мес) *</label>
+            <input type="number" id="am-amount" min="1" step="0.01"></div>
+          <div class="field"><label>День списания</label>
+            <select id="am-day">
+              <script>for(let i=1;i<=28;i++)document.write(`<option value="${i}">${i}-е число</option>`)</script>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="hint" style="margin-bottom:16px">
+        Изменение вступит в силу со следующего автосписания (по дню списания).
+        Текущая привязка СБП не меняется.
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="amount-btn" style="flex:1" onclick="executeAmountChange()">
+          <span class="spinner" id="amount-spinner"></span>
+          <span id="amount-btn-text">Сохранить</span>
+        </button>
+        <button class="btn btn-secondary" onclick="closeModal('amount-modal')">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -717,6 +752,8 @@ async function renderBindings(){
         ${b.status==='ACTIVE'&&bId
           ?`<button class="btn btn-success btn-sm" title="Списать"
               onclick="openCharge(${i})">💳</button>`:''}
+        <button class="btn btn-secondary btn-sm" title="Изменить сумму"
+          onclick="openAmount(${i})">✏️</button>
         ${b.status==='ACTIVE'
           ?`<button class="btn btn-danger btn-sm" title="Деактивировать"
               onclick="openDeact(${i})">🚫</button>`:''}
@@ -857,6 +894,53 @@ async function executeDeactivate(){
     $('deact-btn').disabled=false;
     $('deact-spinner').style.display='none';
     $('deact-btn-text').textContent='Деактивировать';
+  }
+}
+
+// ── EDIT AMOUNT MODAL ────────────────────────────────
+let amountIdx=null;
+
+function openAmount(i){
+  amountIdx=i;
+  const b=bindingsCache[i];
+  $('am-name').value   = b.name;
+  $('am-amount').value = b.amount || '';
+  $('am-day').value    = b.charge_day || 1;
+  hideAlert('amount-error'); hideAlert('amount-success');
+  $('amount-form-inner').style.display='block';
+  $('amount-btn').disabled=false;
+  $('amount-btn-text').textContent='Сохранить';
+  $('amount-modal').classList.add('open');
+}
+
+async function executeAmountChange(){
+  hideAlert('amount-error'); hideAlert('amount-success');
+  const b=bindingsCache[amountIdx];
+  const newAmount=parseFloat($('am-amount').value);
+  const newDay=parseInt($('am-day').value)||1;
+
+  if(!newAmount||newAmount<=0) return showAlert('amount-error','Укажите корректную сумму.');
+
+  $('amount-btn').disabled=true;
+  $('amount-spinner').style.display='inline-block';
+  $('amount-btn-text').textContent='Сохраняем…';
+
+  try{
+    const r=await api('/api/binding/amount',{
+      dbId:   b.id,
+      amount: newAmount,
+      day:    newDay,
+    });
+    if(r.error) throw new Error(r.error);
+    showAlert('amount-success', `✅ Сумма обновлена: ${newAmount.toLocaleString('ru-RU')} ₽/мес, списание ${newDay}-го числа.`);
+    renderBindings();
+    setTimeout(()=>closeModal('amount-modal'), 1200);
+  }catch(e){
+    showAlert('amount-error', e.message);
+  }finally{
+    $('amount-btn').disabled=false;
+    $('amount-spinner').style.display='none';
+    $('amount-btn-text').textContent='Сохранить';
   }
 }
 

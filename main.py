@@ -77,9 +77,24 @@ log.info(f"Логирование запущено, уровень: {LOG_LEVEL}"
 
 # ── ВСПОМОГАТЕЛЬНЫЕ УТИЛИТЫ ЛОГИРОВАНИЯ ───────────────────────
 
+import contextvars
+
+_job_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("_job_id_ctx", default="")
+
 def _req_id() -> str:
-    """Возвращает request-id текущего запроса (хранится в g)."""
-    return getattr(g, "req_id", "--------")
+    """
+    Возвращает request-id текущего запроса (хранится в g) либо job-id
+    текущей фоновой задачи (хранится в _job_id_ctx), если она была
+    установлена через _job_id_ctx.set(...) — см. process_daily_charges().
+
+    Вне HTTP-запроса flask.g недоступен (RuntimeError: Working outside
+    of application context) — это нормально для задач APScheduler,
+    которые выполняются в отдельном потоке без активного app context.
+    """
+    try:
+        return getattr(g, "req_id", "--------")
+    except RuntimeError:
+        return _job_id_ctx.get() or "SCHEDULR"
 
 def _mask(d: dict, keys=("password", "ALFA_PASS")) -> dict:
     """Маскирует чувствительные поля для логирования."""
@@ -1014,6 +1029,68 @@ def api_deactivate():
         log.error(f"[{rid}] DEACTIVATE exception: bindingId={bid}  err={e}")
         return jsonify({"error": str(e)}), 502
 
+@app.route("/api/binding/amount", methods=["POST"])
+@require_auth
+@rate_limit(20)
+def api_change_amount():
+    """
+    Изменение суммы ежемесячного платежа (и опционально дня списания)
+    для существующей привязки. Сама привязка СБП (bindingId) не меняется —
+    меняется только то, какую сумму спишет ежедневный планировщик
+    (process_daily_charges) в следующий charge_day.
+    """
+    rid  = _req_id()
+    body = request.get_json(silent=True) or {}
+    db_id = body.get("dbId")
+
+    log.info(
+        f"[{rid}] CHANGE-AMOUNT: dbId={db_id}  newAmount={body.get('amount')}  "
+        f"newDay={body.get('day')}"
+    )
+
+    if not db_id:
+        log.warning(f"[{rid}] CHANGE-AMOUNT: dbId missing")
+        return jsonify({"error": "dbId обязателен"}), 400
+
+    row = db_execute("SELECT * FROM bindings WHERE id = %s LIMIT 1", (db_id,), fetch="one")
+    if not row:
+        log.warning(f"[{rid}] CHANGE-AMOUNT: row not found  dbId={db_id}")
+        return jsonify({"error": "Запись не найдена"}), 404
+
+    try:
+        new_amount = float(body.get("amount"))
+    except (TypeError, ValueError):
+        log.warning(f"[{rid}] CHANGE-AMOUNT: invalid amount={body.get('amount')!r}")
+        return jsonify({"error": "Некорректная сумма"}), 400
+
+    if new_amount <= 0:
+        return jsonify({"error": "Сумма должна быть больше нуля"}), 400
+    if new_amount > 999_999.99:
+        return jsonify({"error": "Сумма превышает допустимый лимит"}), 400
+
+    sets, vals = ["`amount` = %s"], [new_amount]
+
+    new_day = body.get("day")
+    if new_day is not None:
+        try:
+            new_day = int(new_day)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Некорректный день списания"}), 400
+        if not (1 <= new_day <= 28):
+            return jsonify({"error": "День списания должен быть от 1 до 28"}), 400
+        sets.append("`charge_day` = %s")
+        vals.append(new_day)
+
+    vals.append(db_id)
+    db_execute(f"UPDATE bindings SET {', '.join(sets)} WHERE id = %s", vals)
+
+    log.info(
+        f"[{rid}] CHANGE-AMOUNT OK: dbId={db_id}  oldAmount={row.get('amount')}  "
+        f"newAmount={new_amount}  newDay={new_day if new_day is not None else row.get('charge_day')}"
+    )
+
+    return jsonify({"ok": True, "amount": new_amount, "day": new_day})
+
 # ════════════════════════════════════════════════════════════════
 # LOCAL DATA ROUTES
 # ════════════════════════════════════════════════════════════════
@@ -1280,8 +1357,9 @@ def add_security_headers(response):
 # ════════════════════════════════════════════════════════════════
 
 def process_daily_charges():
-    job_id  = uuid.uuid4().hex[:8].upper()
-    today     = datetime.now().day
+    job_id = uuid.uuid4().hex[:8].upper()
+    _job_id_ctx.set(job_id)  # чтобы db_execute/db_insert/alfa_post логировали под этим id вне Flask-контекста
+    today = datetime.now().day
     today_str = datetime.now().strftime("%Y-%m-%d")
 
     log.info(f"[{job_id}] SCHEDULER daily_charges start: date={today_str}  day={today}")
